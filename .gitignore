@@ -1,0 +1,16 @@
+# Keep credentials, account state and retrieved documents outside Git.
+.quarkclouddrive/
+**/config.json
+**/storage.json
+**/device-id
+**/.device-id
+downloads/
+search/
+browse/
+*.log
+.env
+.env.*
+!.env.example
+results/
+*.key
+__pycache__/
