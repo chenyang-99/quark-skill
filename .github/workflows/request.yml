@@ -1,0 +1,90 @@
+name: Quark Agent request
+run-name: quark-request:${{ github.ref_name }}
+on:
+  push:
+    branches: ['quark-requests/**']
+    paths: ['request.json']
+permissions:
+  contents: write
+concurrency:
+  group: quark-drive-account
+  cancel-in-progress: false
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CODEX_CI: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+      - name: Initialize private runtime directories
+        run: |
+          umask 077
+          echo "QUARK_RESULT_DIR=$RUNNER_TEMP/quark-result" >> "$GITHUB_ENV"
+          echo "QUARK_ENCRYPTED_DIR=$RUNNER_TEMP/quark-encrypted" >> "$GITHUB_ENV"
+      - name: Read encrypted request metadata
+        id: metadata
+        run: node scripts/request-metadata.cjs
+      - name: Initialize encrypted request receiver
+        if: steps.metadata.outputs.operation == 'authorize-start'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/input-key.cjs
+      - name: Install official runtime
+        if: steps.metadata.outputs.operation != 'delivery-test'
+        run: bash scripts/bootstrap.sh
+      - name: Get official authorization link
+        if: steps.metadata.outputs.operation == 'authorize-start'
+        run: node --use-env-proxy scripts/task.cjs authorize start
+      - name: Restore encrypted account state
+        if: steps.metadata.outputs.operation == 'read'
+        id: restore
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/state.cjs restore
+      - name: Execute the authorized encrypted request
+        if: steps.metadata.outputs.operation == 'read' || steps.metadata.outputs.operation == 'authorize-finish'
+        id: execute
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/execute-request.cjs "$QUARK_OPERATION"
+      - name: Persist refreshed account state
+        if: always() && (steps.restore.outcome == 'success' || (steps.metadata.outputs.operation == 'authorize-finish' && steps.execute.outcome == 'success'))
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/state.cjs save
+      - name: Create a non-user delivery fixture
+        if: steps.metadata.outputs.operation == 'delivery-test'
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),path=require('node:path');
+          const root=process.env.QUARK_RESULT_DIR;
+          fs.mkdirSync(root,{recursive:true,mode:0o700});
+          fs.writeFileSync(path.join(root,'001.md'),'# Encrypted GitHub delivery test\n');
+          fs.writeFileSync(path.join(root,'manifest.json'),JSON.stringify({status:'complete',files:[{name:'test.md',result_file:'001.md'}]}));
+          JS
+      - name: Encrypt results for the requesting Agent
+        if: always()
+        run: node scripts/crypto.cjs encrypt-results
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: quark-result-${{ steps.metadata.outputs.request_id }}
+          path: ${{ runner.temp }}/quark-encrypted/encrypted-result.json
+          retention-days: 1
+          if-no-files-found: ignore
+      - name: Return encrypted response through GitHub files
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_JOB_STATUS: ${{ job.status }}
+        run: node --use-env-proxy scripts/publish-response.cjs

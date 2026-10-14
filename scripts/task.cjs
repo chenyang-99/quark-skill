@@ -9,6 +9,7 @@ const { TextDecoder } = require('node:util');
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 20;
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const SESSION_ID = `${Math.floor(Date.now() / 1000)}-${crypto.randomBytes(3).toString('hex')}`;
 
 function parseOutput(stdout) {
@@ -31,10 +32,14 @@ function safeMessage(message, secret = '') {
 function runCli(args, input, { allowFailure = false } = {}) {
   const skill = process.env.QUARK_SKILL_DIR || path.join(os.homedir(), '.agents/skills/quarkclouddrive');
   const cli = path.join(skill, 'scripts/quark-drive.cjs');
+  const childEnv = { ...process.env };
+  for (const key of ['QUARK_STATE_KEY', 'GITHUB_TOKEN', 'QUARK_ENCRYPTED_REQUEST', 'QUARK_RESULT_PUBLIC_KEY', 'QUARK_AUTH_CODE']) {
+    delete childEnv[key];
+  }
   const child = spawnSync(process.execPath,
     ['--require', path.join(__dirname, 'env-proxy.cjs'), cli, ...args,
       '--session-input', input, '--session-id', SESSION_ID],
-    { encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
+    { encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024, env: childEnv });
   if (child.error) throw new Error('Official CLI could not finish the request within the execution limits.');
   const output = parseOutput(child.stdout);
   if (!allowFailure && (child.status !== 0 || output.result.code !== 0)) {
@@ -95,8 +100,6 @@ function authorize(action) {
     const url = new URL(match[0]);
     if (url.hostname !== 'pan.quark.cn' || url.protocol !== 'https:') throw new Error('Unexpected authorization URL.');
     writeJson('authorization.json', { status: 'awaiting_user', url: url.href });
-    if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-      `请打开[夸克官方授权页](${url.href})完成授权，将一次性授权码交给 Agent，由 Agent 保存到 QUARK_AUTH_CODE Secret 后运行 finish。\n`);
     console.log('Official authorization link generated; complete binding before reading files.');
   } else if (action === 'finish') {
     const code = process.env.QUARK_AUTH_CODE;
@@ -118,10 +121,13 @@ function readMarkdown() {
   if (!artifact?.data?.file_path) throw new Error('Search succeeded without a complete result artifact.');
   const lines = fs.readFileSync(artifact.data.file_path, 'utf8').split(/\r?\n/).filter(Boolean);
   const files = markdownCandidates(lines.map((line) => JSON.parse(line)), limit);
+  const knownBytes = files.reduce((sum, item) => sum + (typeof item.size === 'number' ? item.size : 0), 0);
+  if (knownBytes > MAX_TOTAL_BYTES) throw new Error('Selected Markdown files exceed the 20 MiB total limit.');
   const manifest = { request_id: process.env.QUARK_REQUEST_ID || '', status: 'complete',
     matched_count: files.length, files: [], notices: [] };
   if (result.notice?.text) manifest.notices.push(result.notice.text);
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-md-'));
+  let totalBytes = 0;
   try {
     for (const [index, file] of files.entries()) {
       const output = path.join(staging, String(index + 1));
@@ -131,6 +137,8 @@ function readMarkdown() {
       if (!data?.filePath) throw new Error('The official reader did not return a file path.');
       const name = `${String(index + 1).padStart(3, '0')}.md`;
       const size = exportMarkdown(data.filePath, output, path.join(resultDirectory(), name));
+      totalBytes += size;
+      if (totalBytes > MAX_TOTAL_BYTES) throw new Error('Selected Markdown files exceed the 20 MiB total limit.');
       manifest.files.push({ name: file.filename, result_file: name, bytes: size });
       if (download.notice?.text) manifest.notices.push(download.notice.text);
     }
@@ -141,7 +149,7 @@ function readMarkdown() {
   }
 }
 
-module.exports = { parseOutput, safeMessage, markdownCandidates, exportMarkdown };
+module.exports = { parseOutput, safeMessage, markdownCandidates, exportMarkdown, authorize, readMarkdown, writeJson };
 if (require.main === module) {
   try {
     if (process.argv[2] === 'authorize') authorize(process.argv[3]);
@@ -152,7 +160,7 @@ if (require.main === module) {
     const directory = resultDirectory();
     for (const name of fs.readdirSync(directory)) if (/^\d{3}\.md$/.test(name)) fs.unlinkSync(path.join(directory, name));
     writeJson('manifest.json', { status: 'failed', message: safeMessage(error.message, process.env.QUARK_AUTH_CODE) });
-    console.error(safeMessage(error.message, process.env.QUARK_AUTH_CODE));
+    console.error('The request failed. Details are returned only in the encrypted result.');
     process.exitCode = 1;
   }
 }

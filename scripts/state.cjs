@@ -55,6 +55,15 @@ function configPath() {
   return path.join(skill, 'codex/config.json');
 }
 
+async function ensureBranch(repository) {
+  const base = `/repos/${repository}`;
+  const reference = await api('GET', `${base}/git/ref/heads/${STATE_BRANCH}`, undefined, { allow404: true });
+  if (!reference) {
+    if (!/^[a-f0-9]{40}$/i.test(process.env.GITHUB_SHA || '')) throw new Error('Missing workflow commit.');
+    await api('POST', `${base}/git/refs`, { ref: `refs/heads/${STATE_BRANCH}`, sha: process.env.GITHUB_SHA });
+  }
+}
+
 async function main(action) {
   const repository = process.env.GITHUB_REPOSITORY;
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '')) throw new Error('Invalid repository.');
@@ -76,11 +85,7 @@ async function main(action) {
       console.log('Authorization state unchanged.');
       return;
     }
-    const reference = await api('GET', `${base}/git/ref/heads/${STATE_BRANCH}`, undefined, { allow404: true });
-    if (!reference) {
-      if (!/^[a-f0-9]{40}$/i.test(process.env.GITHUB_SHA || '')) throw new Error('Missing workflow commit.');
-      await api('POST', `${base}/git/refs`, { ref: `refs/heads/${STATE_BRANCH}`, sha: process.env.GITHUB_SHA });
-    }
+    await ensureBranch(repository);
     await api('PUT', `${base}/contents/${STATE_FILE}`, {
       message: 'Persist encrypted Quark authorization state', branch: STATE_BRANCH,
       content: Buffer.from(seal(bytes, key, repository)).toString('base64'),
@@ -92,7 +97,7 @@ async function main(action) {
   }
 }
 
-module.exports = { seal, unseal, stateKey };
+module.exports = { seal, unseal, stateKey, api, ensureBranch, STATE_BRANCH };
 if (require.main === module) main(process.argv[2]).catch(() => {
   // Never dump HTTP response bodies, configuration data or process environment.
   console.error('Authorization state operation failed. Check binding, key and repository permissions.');
