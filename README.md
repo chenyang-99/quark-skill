@@ -93,6 +93,7 @@ GitHub 附件和请求分支只包含密文；附件默认保留 1 天。
 `verify.yml` 检查状态加密、请求/响应加密、错误结果处理、文件边界与模拟 CLI 读取，并在真实 GitHub runner 上安装官方 CLI。
 `delivery-test` 进一步验证真实 GitHub 文件请求、Actions 执行、密文响应和客户端解密，使用不涉及用户数据的测试文档。
 这些验证不能代替账号授权后的真实网盘读取。
+运行包固定为官方 1.0.24 并校验 SHA-256，避免每次启动先请求版本接口。升级时需更新包地址、哈希和版本并重新验证。
 
 ## 实现文件
 
@@ -106,7 +107,7 @@ GitHub 附件和请求分支只包含密文；附件默认保留 1 天。
 | `scripts/input-key.cjs` | 接收公钥发布、私钥加密保存 |
 | `scripts/state.cjs` | 加密恢复、保存账号状态 |
 | `scripts/task.cjs` | 固定的授权与 Markdown 读取操作 |
-| `scripts/bootstrap.sh` | 安装官方运行时 |
+| `scripts/bootstrap.sh` | 校验 SHA-256 并安装固定版本的官方运行时 |
 
 ## 参考
 
