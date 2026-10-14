@@ -1,7 +1,19 @@
-# Quark Skill：通过 GitHub 读取夸克 Markdown
+# Quark Skill：一个云端入口读取夸克 Markdown
 
 公开仓库：`chenyang-99/quark-skill`。
-不同 Agent 可以通过同一套 GitHub 文件接口读取夸克网盘中的 Markdown，无需在用户电脑上安装 skill。
+只部署一个云端调用入口，保存一份夸克账号授权。以后换 ChatGPT、Codex 或其他具备工具能力的 Agent，仍然调用这个入口，无需分别绑定夸克账号。用户电脑无需安装 skill。
+
+## 平时怎么用
+
+1. 首次设置一次 GitHub Secret，并在夸克官方页面完成账号授权。
+2. 给调用方这份 [Skill 说明](skills/quark-markdown/SKILL.md)，让它读取你指定的 Markdown 文件。
+3. 换 Agent 时，为新的调用方连接同一个 GitHub 仓库，再使用同一份说明即可。
+
+GitHub 端复用有效授权，不按调用方区分夸克登录。授权被撤销或无法刷新时，再完成一次官方授权。
+客户端自动处理请求传输，用户不需要为每个 Agent 创建密钥、账号或单独的后台。
+
+GitHub Actions 每次任务使用临时运行环境，所以需要保存并恢复授权状态。
+仓库保留公开时，密钥用于保护保存的登录凭据和读取内容。它不承担“多 Agent 登录”功能。
 
 ## 运行方式
 
@@ -99,9 +111,8 @@ GitHub 附件和请求分支只包含密文；附件默认保留 1 天。
 
 | 文件 | 用途 |
 | --- | --- |
-| `.github/workflows/request.yml` | Agent 通用 GitHub 文件请求入口 |
-| `.github/workflows/authorize.yml` | 支持 Actions dispatch 的授权入口 |
-| `.github/workflows/read-markdown.yml` | 支持 Actions dispatch 的读取入口 |
+| `.github/workflows/request.yml` | 唯一的云端调用入口，处理授权与读取请求 |
+| `.github/workflows/verify.yml` | 部署检查，不是另一套调用后台 |
 | `scripts/invoke.py` | 文件请求客户端与解密 |
 | `scripts/crypto.cjs` | RSA-OAEP-SHA256 与 AES-256-GCM 混合加密 |
 | `scripts/input-key.cjs` | 接收公钥发布、私钥加密保存 |

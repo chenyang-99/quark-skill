@@ -1,12 +1,17 @@
 ---
 name: quark-markdown-github
-version: 1.1.0
-description: Read authorized Quark Drive Markdown using encrypted GitHub file requests. The official Quark runtime and persistent login state run in GitHub Actions, independently of the caller's chat session.
+version: 1.2.0
+description: Call one GitHub-hosted Quark Markdown backend that reuses a single account authorization across chat sessions. The caller does not need to log into Quark separately.
 ---
 
 # Quark Markdown through GitHub
 
 Repository: `chenyang-99/quark-skill` (public code, encrypted private data).
+There is one cloud entry point and one persisted Quark account authorization.
+Changing the calling Agent does not create a separate backend or require a new
+Quark login while that authorization remains valid. Do not ask the user to bind
+Quark again merely because the caller or chat session changed. Transport keys
+are handled automatically by the client for each request.
 The caller needs authenticated GitHub Contents read/write, and encryption tools.
 It does not need permission to manage GitHub Secrets for ordinary reading, or a
 special Actions-dispatch tool. A code-reading-only connection cannot submit jobs.
@@ -93,11 +98,3 @@ response status and failed manifests. A missing result is not successful reading
 Request branches and artifacts contain ciphertext only. If the caller loses its
 private key, it must submit a new request; the repository cannot decrypt old
 response ciphertext for that caller.
-
-## Optional workflow dispatch
-
-Clients with Actions write may instead call `authorize.yml` or `read-markdown.yml`
-via `workflow_dispatch`. They require the same `request_id`, `result_public_key`,
-and encrypted_request (JSON string). Authorization also uses `action:start|finish`.
-Retrieve the encrypted artifact and decrypt with the same output context.
-Do not put filename keywords or one-time authorization codes into plaintext inputs.
