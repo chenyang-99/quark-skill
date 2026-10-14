@@ -43,14 +43,14 @@ jobs:
         if: steps.metadata.outputs.operation == 'authorize-start'
         run: node --use-env-proxy scripts/task.cjs authorize start
       - name: Restore encrypted account state
-        if: steps.metadata.outputs.operation == 'read'
+        if: steps.metadata.outputs.operation == 'read' || steps.metadata.outputs.operation == 'browse'
         id: restore
         env:
           GITHUB_TOKEN: ${{ github.token }}
           QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
         run: node --use-env-proxy scripts/state.cjs restore
       - name: Execute the authorized encrypted request
-        if: steps.metadata.outputs.operation == 'read' || steps.metadata.outputs.operation == 'authorize-finish'
+        if: steps.metadata.outputs.operation == 'read' || steps.metadata.outputs.operation == 'browse' || steps.metadata.outputs.operation == 'authorize-finish'
         id: execute
         env:
           GITHUB_TOKEN: ${{ github.token }}

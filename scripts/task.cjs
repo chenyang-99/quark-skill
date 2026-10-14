@@ -91,6 +91,68 @@ function writeJson(filename, value) {
   fs.writeFileSync(path.join(resultDirectory(), filename), JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
 }
 
+function artifactItems(rows, action) {
+  const artifact = rows.findLast((row) => row.type === 'artifact' && row.action === action);
+  if (!artifact?.data?.file_path) throw new Error(`${action} succeeded without a complete result artifact.`);
+  return fs.readFileSync(artifact.data.file_path, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function isDirectory(item) {
+  return String(item.file_type) === '0' || item.category === 0;
+}
+
+function browseDirectory() {
+  const folder = (process.env.QUARK_FOLDER || '').trim();
+  let fid = process.env.QUARK_FOLDER_FID || '';
+  if (fid && (fid.length > 8192 || /[\x00-\x1f\x7f]/.test(fid))) throw new Error('Invalid folder identifier.');
+  if (!fid && (!folder || folder.length > 50)) throw new Error('Provide a folder name of 1–50 characters.');
+  const input = `列出夸克网盘文件夹“${folder || '已选目录'}”的直接子项`;
+  const manifest = { request_id: process.env.QUARK_REQUEST_ID || '', status: 'complete',
+    operation: 'browse', folder: folder || null, items: [], files: [], notices: [] };
+  if (!fid) {
+    const { result, rows } = runCli(['search', '--keyword', folder, '--search-type', 'dir', '--stdout-only'], input);
+    if (result.notice?.text) manifest.notices.push(result.notice.text);
+    const seen = new Set();
+    let folders = artifactItems(rows, 'search').filter((item) => {
+      if (typeof item.fid !== 'string' || !item.fid || typeof item.filename !== 'string' || !isDirectory(item)) return false;
+      const identity = item.fid.slice(item.fid.lastIndexOf('|') + 1);
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+    const exact = folders.filter((item) => item.filename === folder);
+    if (exact.length) folders = exact;
+    if (folders.length !== 1) {
+      manifest.matching_folders = folders.map((item) => ({ name: item.filename, fid: item.fid }));
+      manifest.requires_selection = folders.length > 1;
+      manifest.message = folders.length ? 'Multiple folders match; select one before listing its contents.' : 'No matching folder was found in the authorized scope.';
+      writeJson('manifest.json', manifest);
+      console.log('Folder search completed; no directory contents were fetched.');
+      return;
+    }
+    fid = folders[0].fid;
+    manifest.folder = folders[0].filename;
+  }
+  const { result, rows } = runCli(['browse', '--parent-fid', fid, '--all'], input);
+  if (result.data?.hasMore) throw new Error('The official directory listing is incomplete.');
+  if (result.notice?.text) manifest.notices.push(result.notice.text);
+  const seen = new Set();
+  manifest.items = artifactItems(rows, 'browse').map((item) => {
+    if (typeof item.fid !== 'string' || !item.fid || typeof item.filename !== 'string') throw new Error('Invalid directory listing item.');
+    const identity = item.fid.slice(item.fid.lastIndexOf('|') + 1);
+    if (seen.has(identity)) return null;
+    seen.add(identity);
+    const type = isDirectory(item) ? 'directory' :
+      (String(item.file_type) === '1' || (Number.isInteger(item.category) && item.category >= 1 && item.category <= 8)) ? 'file' : 'unknown';
+    return { name: item.filename, fid: item.fid, type,
+      ...(typeof item.size === 'number' ? { bytes: item.size } : {}) };
+  }).filter(Boolean);
+  manifest.item_count = manifest.items.length;
+  manifest.folder_fid = fid;
+  writeJson('manifest.json', manifest);
+  console.log(`Directory listing complete: ${manifest.items.length} item(s).`);
+}
+
 function authorize(action) {
   if (action === 'start') {
     const { result } = runCli(['login'], '为 GitHub 上的夸克 Markdown 读取工具获取授权入口', { allowFailure: true });
@@ -149,11 +211,12 @@ function readMarkdown() {
   }
 }
 
-module.exports = { parseOutput, safeMessage, markdownCandidates, exportMarkdown, authorize, readMarkdown, writeJson };
+module.exports = { parseOutput, safeMessage, markdownCandidates, exportMarkdown, authorize, readMarkdown, browseDirectory, writeJson };
 if (require.main === module) {
   try {
     if (process.argv[2] === 'authorize') authorize(process.argv[3]);
     else if (process.argv[2] === 'read') readMarkdown();
+    else if (process.argv[2] === 'browse') browseDirectory();
     else throw new Error('Expected authorize or read.');
   } catch (error) {
     // Remove incomplete documents so a failed task cannot look like full success.

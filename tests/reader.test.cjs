@@ -79,6 +79,54 @@ test('authorization failures preserve the official reason only in private result
   assert.ok(!child.stdout.includes('获取授权地址失败'));
 });
 
+test('directory listing consumes all direct children and requires selection for same-name folders', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-browse-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const skill = path.join(root, 'skill');
+  fs.mkdirSync(path.join(skill, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(skill, 'scripts/quark-drive.cjs'), `
+    const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+    const args=process.argv.slice(2), print=value=>console.log(JSON.stringify(value));
+    let items;
+    if(args[0]==='search'){
+      assert.equal(args[args.indexOf('--search-type')+1],'dir');
+      items=[{fid:'dir|one',filename:'notes',category:0},
+        {fid:'dir|two',filename:process.env.AMBIGUOUS?'notes':'notes-backup',file_type:'0'}];
+    }else if(args[0]==='browse'){
+      assert.ok(!process.env.AMBIGUOUS);
+      assert.ok(args.includes('--all'));
+      assert.equal(args[args.indexOf('--parent-fid')+1],'dir|one');
+      items=Array.from({length:5},(_,i)=>({fid:'file|'+i,filename:i+'.pdf',file_type:'1',size:20}));
+      items.push({fid:'dir|child',filename:'child',category:0},{fid:'unknown',filename:'unknown'});
+    }else process.exit(1);
+    const file=path.join(process.env.FIXTURE_ROOT,args[0]+'.jsonl');
+    fs.writeFileSync(file,items.map(item=>JSON.stringify(item)).join('\\n')+'\\n');
+    print({type:'result',code:0,action:args[0],data:{file_list:[],hasMore:false}});
+    print({type:'artifact',code:0,action:args[0],data:{file_path:file}});
+  `);
+  for (const ambiguous of [false, true]) {
+    const result = path.join(root, ambiguous ? 'ambiguous-result' : 'result');
+    const env = { ...process.env, QUARK_SKILL_DIR: skill, QUARK_FOLDER: 'notes',
+      QUARK_FOLDER_FID: '', QUARK_RESULT_DIR: result, FIXTURE_ROOT: root };
+    if (ambiguous) env.AMBIGUOUS = '1';
+    else delete env.AMBIGUOUS;
+    const child = spawnSync(process.execPath, [path.join(__dirname, '../scripts/task.cjs'), 'browse'], { encoding: 'utf8', env });
+    assert.equal(child.status, 0, child.stderr);
+    const manifest = JSON.parse(fs.readFileSync(path.join(result, 'manifest.json'), 'utf8'));
+    if (ambiguous) {
+      assert.equal(manifest.requires_selection, true);
+      assert.equal(manifest.matching_folders.length, 2);
+      assert.deepEqual(manifest.items, []);
+    } else {
+      assert.equal(manifest.item_count, 7);
+      assert.equal(manifest.items[5].type, 'directory');
+      assert.equal(manifest.items[6].type, 'unknown');
+      assert.equal(manifest.folder, 'notes');
+      assert.deepEqual(manifest.files, []);
+    }
+  }
+});
+
 test('reader consumes the full artifact and exports Markdown, not bounded preview items', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-integration-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -1,6 +1,6 @@
 ---
 name: quark-markdown-github
-version: 1.2.0
+version: 1.3.0
 description: Call one GitHub-hosted Quark Markdown backend that reuses a single account authorization across chat sessions. The caller does not need to log into Quark separately.
 ---
 
@@ -25,7 +25,7 @@ In the Agent's execution environment, use:
 
 Pass arguments as separate strings; never interpolate user text into shell code.
 Default max-files is 5, configurable 1–20. Each file is at most 5 MiB, combined
-at most 20 MiB. If no keyword is known, ask which Markdown file the user wants.
+at most 20 MiB. If no keyword is known for a content read, ask which Markdown file the user wants.
 Do not silently change keywords, ignore a count limit, or report reading success
 merely because a workflow started.
 
@@ -51,6 +51,21 @@ Validate a user-selected actual Markdown file after binding. Existing encrypted
 state alone does not establish usable account access. If revoked/expired, obtain
 fresh user authorization. Never read or display the saved CLI credential file.
 
+## List a directory
+
+For "what files are in this folder", use:
+
+`python scripts/invoke.py browse --repo chenyang-99/quark-skill --folder <user-folder-name> --output <fresh-private-output-directory>`
+
+The backend uses official directory search, then `browse --all` for direct
+children only. It consumes the full artifact rather than the bounded preview.
+Read `manifest.json.items`; no file contents are downloaded by this operation.
+A successful manifest with empty `matching_folders` means the named folder was
+not found in the authorized scope, not that it is an empty existing folder.
+If `requires_selection` is true, ask the user to select a matching folder, then
+submit `browse --folder-fid <fid-from-that-result>`. Do not silently change the
+folder name, select between same-name folders, or recurse into child folders.
+
 ## GitHub file interface for other clients
 
 Generate a UUID and an ephemeral RSA key pair (at least 2048 bits) for responses.
@@ -69,15 +84,16 @@ Keep the private key only in the caller's execution environment.
 Request JSON has these fields:
 
 - `request_id`: UUID, matching the request branch.
-- `operation`: `read`, `authorize-start`, `authorize-finish`, or `delivery-test`.
+- `operation`: `read`, `browse`, `authorize-start`, `authorize-finish`, or `delivery-test`.
 - `result_public_key`: the caller's ephemeral RSA public key in SPKI PEM format.
-- `encrypted_request`: encrypted payload for read/authorize-finish, omitted for
+- `encrypted_request`: encrypted payload for read/browse/authorize-finish, omitted for
   authorize-start and the non-user delivery test.
 
 For input encryption, fetch `request-public-key.pem` from branch `quark-state`.
 It is created by the first successful authorize-start after Secret setup.
 Input payload is JSON with `operation`, `request_id`, and either `keyword` plus
-`max_files`, or `auth_code`. Encrypt with the repository input public key.
+`max_files`, `folder` plus optional `folder_fid`, or `auth_code`.
+Encrypt with the repository input public key.
 
 ## Encryption format
 

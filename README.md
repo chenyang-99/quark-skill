@@ -81,6 +81,10 @@ python scripts/invoke.py authorize-finish --repo chenyang-99/quark-skill \
 # 绑定后读取真实文件；关键词不会以明文进入 GitHub 请求和日志
 python scripts/invoke.py read --repo chenyang-99/quark-skill \
   --keyword '你的笔记.md' --max-files 5 --output ./results/notes
+
+# 列出指定文件夹当前层的文件与子文件夹，不下载文件内容
+python scripts/invoke.py browse --repo chenyang-99/quark-skill \
+  --folder '文件夹名称' --output ./results/directory
 ```
 
 客户端提交临时 `quark-requests/<UUID>` 分支并等待加密响应。
@@ -92,6 +96,7 @@ GitHub 附件和请求分支只包含密文；附件默认保留 1 天。
 ## 读取范围
 
 - 只处理 `.md` / `.markdown` 文件，支持有效 UTF-8 文本。
+- `browse` 可列出指定文件夹的全部直接子项，名称与清单仍通过密文传输；不递归，不下载内容。同名目录有多个匹配时先让用户选择。
 - 使用官方 `search` 和 `download` 读取入口；本工作流不移动、上传或重命名网盘文件。
 - 默认最多 5 份，可设 1–20；每份最多 5 MiB，总计最多 20 MiB。
 - 超出限制时要求缩小查询，不静默截断成部分结果。

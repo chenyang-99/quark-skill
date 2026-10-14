@@ -6,7 +6,7 @@ try {
   const input = JSON.parse(fs.readFileSync('request.json', 'utf8'));
   if (!/^[a-f0-9-]{36}$/i.test(input.request_id || '') ||
       process.env.GITHUB_REF_NAME !== `quark-requests/${input.request_id}` ||
-      !['read', 'authorize-start', 'authorize-finish', 'delivery-test'].includes(input.operation)) {
+      !['read', 'browse', 'authorize-start', 'authorize-finish', 'delivery-test'].includes(input.operation)) {
     throw new Error('Invalid request metadata.');
   }
   const object = crypto.createPublicKey(input.result_public_key);

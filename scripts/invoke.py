@@ -32,9 +32,11 @@ def node(*args, body=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["authorize-start", "authorize-finish", "read", "delivery-test"])
+    parser.add_argument("operation", choices=["authorize-start", "authorize-finish", "read", "browse", "delivery-test"])
     parser.add_argument("--repo", required=True)
     parser.add_argument("--keyword")
+    parser.add_argument("--folder")
+    parser.add_argument("--folder-fid")
     parser.add_argument("--max-files", type=int, default=5)
     parser.add_argument("--auth-code-file", type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -44,6 +46,8 @@ def main():
         parser.error("--repo must be owner/name")
     if args.operation == "read" and (not args.keyword or not 1 <= len(args.keyword) <= 50 or not 1 <= args.max_files <= 20):
         parser.error("read requires a 1–50 character keyword and max-files of 1–20")
+    if args.operation == "browse" and not (args.folder_fid or (args.folder and 1 <= len(args.folder) <= 50)):
+        parser.error("browse requires a 1–50 character --folder name or a previously returned --folder-fid")
     if args.operation == "authorize-finish" and not args.auth_code_file:
         parser.error("authorize-finish requires a private --auth-code-file")
     if args.output.exists() and any(args.output.iterdir()):
@@ -57,7 +61,7 @@ def main():
         node("keygen", private_dir)
         request = {"request_id": request_id, "operation": args.operation,
                    "result_public_key": (private_dir / "result.public.pem").read_text()}
-        if args.operation in ("read", "authorize-finish"):
+        if args.operation in ("read", "browse", "authorize-finish"):
             public = gh("api", f"repos/{args.repo}/contents/request-public-key.pem?ref=quark-state",
                         missing_ok=True)
             if public is None:
@@ -67,6 +71,8 @@ def main():
             payload = {"operation": args.operation, "request_id": request_id}
             if args.operation == "read":
                 payload.update(keyword=args.keyword, max_files=args.max_files)
+            elif args.operation == "browse":
+                payload.update(folder=args.folder, folder_fid=args.folder_fid)
             else:
                 payload["auth_code"] = args.auth_code_file.read_text().strip()
             context = f"request:{args.repo}:{request_id}"
