@@ -20,9 +20,14 @@ fi
 if [ "$QUARK_CURRENT_VERSION" != "$QUARK_EXPECTED_VERSION" ]; then
   QUARK_DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/quark-install.XXXXXX")"
   trap 'rm -rf "$QUARK_DOWNLOAD_DIR"' EXIT
-  curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
-    --connect-timeout 15 --max-time 60 \
-    "$QUARK_PACKAGE_URL" -o "$QUARK_DOWNLOAD_DIR/package.zip"
+  QUARK_BUNDLED_PACKAGE="$QUARK_ADAPTER_DIR/../vendor/quarkclouddrive-1.0.24.zip"
+  if [ -f "$QUARK_BUNDLED_PACKAGE" ]; then
+    cp "$QUARK_BUNDLED_PACKAGE" "$QUARK_DOWNLOAD_DIR/package.zip"
+  else
+    curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 15 --max-time 60 \
+      "$QUARK_PACKAGE_URL" -o "$QUARK_DOWNLOAD_DIR/package.zip"
+  fi
   python3 - "$QUARK_DOWNLOAD_DIR/package.zip" "$QUARK_PACKAGE_SHA" "$QUARK_SKILL_DIR" <<'PY'
 from pathlib import Path, PurePosixPath
 import hashlib, shutil, stat, sys, zipfile
