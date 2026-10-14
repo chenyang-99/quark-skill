@@ -96,14 +96,14 @@ function authorize(action) {
     const { result } = runCli(['login'], '为 GitHub 上的夸克 Markdown 读取工具获取授权入口', { allowFailure: true });
     if (result.code === -118) throw new Error('This runner already has an authorized account.');
     const match = String(result.msg || '').match(/https:\/\/pan\.quark\.cn\/open\/v1\/oauth\/agent[^\s\\]+/);
-    if (!match) throw new Error('The official service did not provide an authorization URL.');
+    if (!match) throw new Error(`Official CLI login failed (code ${result.code}): ${safeMessage(result.msg || 'No authorization URL was returned.')}`);
     const url = new URL(match[0]);
     if (url.hostname !== 'pan.quark.cn' || url.protocol !== 'https:') throw new Error('Unexpected authorization URL.');
     writeJson('authorization.json', { status: 'awaiting_user', url: url.href });
     console.log('Official authorization link generated; complete binding before reading files.');
   } else if (action === 'finish') {
     const code = process.env.QUARK_AUTH_CODE;
-    if (!code) throw new Error('QUARK_AUTH_CODE is missing from repository Secrets.');
+    if (!code) throw new Error('Authorization code is missing from the encrypted request.');
     const { result } = runCli(['login', '--token', code], '完成 GitHub 夸克网盘账号授权');
     writeJson('authorization.json', { status: 'bound', message: safeMessage(result.data?.msg || result.msg, code) });
     console.log('Official account binding completed.');

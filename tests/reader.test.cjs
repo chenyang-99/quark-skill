@@ -60,6 +60,25 @@ test('error messages redact the one-time authorization code', () => {
   assert.ok(!safeMessage('bad: ONE_TIME_SECRET', 'ONE_TIME_SECRET').includes('ONE_TIME_SECRET'));
 });
 
+test('authorization failures preserve the official reason only in private results', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-auth-failure-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const skill = path.join(root, 'skill');
+  fs.mkdirSync(path.join(skill, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(skill, 'scripts/quark-drive.cjs'),
+    `console.log(JSON.stringify({type:'result',code:-108,msg:'获取授权地址失败'})); process.exitCode=1;`);
+  const result = path.join(root, 'result');
+  const child = spawnSync(process.execPath, [path.join(__dirname, '../scripts/task.cjs'), 'authorize', 'start'], {
+    encoding: 'utf8', env: { ...process.env, QUARK_SKILL_DIR: skill, QUARK_RESULT_DIR: result },
+  });
+  assert.equal(child.status, 1);
+  const manifest = JSON.parse(fs.readFileSync(path.join(result, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.status, 'failed');
+  assert.match(manifest.message, /code -108.*获取授权地址失败/);
+  assert.ok(!child.stderr.includes('获取授权地址失败'));
+  assert.ok(!child.stdout.includes('获取授权地址失败'));
+});
+
 test('reader consumes the full artifact and exports Markdown, not bounded preview items', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-integration-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
