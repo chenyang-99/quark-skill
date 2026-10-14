@@ -9,10 +9,11 @@ const STATE_BRANCH = 'quark-state';
 const STATE_FILE = 'auth-state.enc';
 
 function stateKey(value) {
-  if (!/^[0-9a-f]{64}$/i.test(value || '')) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!/^[0-9a-f]{64}$/i.test(normalized)) {
     throw new Error('QUARK_STATE_KEY must be a 32-byte hex key stored in GitHub Secrets.');
   }
-  return Buffer.from(value, 'hex');
+  return Buffer.from(normalized, 'hex');
 }
 
 function seal(bytes, key, repository) {

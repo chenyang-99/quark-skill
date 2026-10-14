@@ -14,6 +14,7 @@ test('state is authenticated, scoped to its repository, and hides plaintext', ()
   const encrypted = seal(bytes, key, 'owner/private-repository');
   assert.ok(!encrypted.includes(bytes.toString()));
   assert.deepEqual(unseal(encrypted, key, 'owner/private-repository'), bytes);
+  assert.deepEqual(unseal(encrypted, `\n${key}\n`, 'owner/private-repository'), bytes);
   assert.throws(() => unseal(encrypted, 'cd'.repeat(32), 'owner/private-repository'));
   assert.throws(() => unseal(encrypted, key, 'owner/different-repository'));
   const tampered = JSON.parse(encrypted);
