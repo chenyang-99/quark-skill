@@ -22,3 +22,9 @@ jobs:
         run: node --test tests/*.test.cjs
       - name: Install and verify official runtime on a GitHub runner
         run: bash scripts/bootstrap.sh
+      - name: Check official API connectivity and runtime channel
+        run: |
+          bash scripts/quark.sh resolve-agent
+          curl --head --silent --show-error --connect-timeout 10 --max-time 20 \
+            --output /dev/null --write-out 'Official API HTTP status: %{http_code}\n' \
+            https://open-api-drive.quark.cn/
