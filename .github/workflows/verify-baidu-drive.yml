@@ -1,0 +1,43 @@
+name: Verify Baidu Drive skill installation
+on:
+  push:
+    branches: [main, feat/baidu-drive-skill]
+    paths:
+      - 'skills/baidu-drive/**'
+      - 'vendor/baidu-drive/**'
+      - 'scripts/check-baidu-skill.py'
+      - '.github/workflows/verify-baidu-drive.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify pinned official files
+        run: python3 scripts/check-baidu-skill.py
+      - name: Shell syntax
+        run: bash -n skills/baidu-drive/scripts/install.sh skills/baidu-drive/scripts/login.sh
+  install-cli:
+    needs: integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install official bdpan CLI without login
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          export PATH="$HOME/.local/bin:$PATH"
+          mkdir -p "$RUNNER_TEMP/baidu-cli-installer"
+          cd "$RUNNER_TEMP/baidu-cli-installer"
+          bash "$GITHUB_WORKSPACE/skills/baidu-drive/scripts/install.sh" --yes
+          command -v bdpan
+          bdpan version
+      - name: Confirm run has not ingested textbooks
+        run: echo 'Official CLI installed on disposable runner; OAuth not authorized, textbooks not downloaded.'
