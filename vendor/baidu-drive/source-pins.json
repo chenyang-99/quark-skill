@@ -1,0 +1,12 @@
+{
+  "skills/baidu-drive/SKILL.md": "f09fd6cb2cbe70f4f5440e0dc66f1a7451e4ceca",
+  "skills/baidu-drive/VERSION": "535cc4dda671127ffe6c13fd6269dc7ebb105681",
+  "skills/baidu-drive/scripts/install.sh": "3bad12e1c19fcf159cdba8301a0e7774cd587f08",
+  "skills/baidu-drive/scripts/login.sh": "65ef812e4c2809750dee4b331b99efc6a84e4746",
+  "skills/baidu-drive/reference/authentication.md": "2682f26596bc2cb8846af6c24ac60c293b0b5fdc",
+  "skills/baidu-drive/reference/bdpan-commands.md": "67b616d6efd36006b640fa31bdc2cde72c383bf9",
+  "skills/baidu-drive/reference/examples.md": "c4b62860953e4845e40fdccd9a8405da4a5c9a43",
+  "skills/baidu-drive/reference/notes.md": "69313d3ec653765d56c743f83625fbcb441c1e73",
+  "skills/baidu-drive/reference/troubleshooting.md": "c28cc0fc244dbb5038941d6ff8122bc77572de22",
+  "vendor/baidu-drive/LICENSE": "775c46f30e9dac227cc94eedfc1bb98a2be09f97"
+}
