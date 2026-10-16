@@ -1,0 +1,51 @@
+name: Batch AI time-savings contact folders
+on:
+  push:
+    branches: [ai-save-time-contact-20261016]
+    paths: ['.github/workflows/bulk-ai-time-save.yml']
+permissions:
+  contents: write
+concurrency:
+  group: quark-drive-account
+  cancel-in-progress: false
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CODEX_CI: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+      - name: Install verified Quark CLI
+        run: bash scripts/bootstrap.sh
+      - name: Restore encrypted Quark authorization
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/state.cjs restore
+      - name: Create final folders recursively
+        run: node scripts/bulk-ai-folder.cjs
+      - name: Save refreshed encrypted account state
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          QUARK_STATE_KEY: ${{ secrets.QUARK_STATE_KEY }}
+        run: node --use-env-proxy scripts/state.cjs save
+      - name: Publish aggregate statistics
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          let stats={status:'failed-before-run'};
+          try { stats=JSON.parse(fs.readFileSync('bulk-folder-status.json','utf8')); } catch {}
+          const body={message:'Record final folder rollout counts',branch:process.env.GITHUB_REF_NAME,content:Buffer.from(JSON.stringify(stats)).toString('base64')};
+          const resp=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/contents/bulk-folder-status.json',{method:'PUT',headers:{Authorization:'Bearer '+process.env.GITHUB_TOKEN,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2026-03-10'},body:JSON.stringify(body)});
+          if(!resp.ok)throw new Error('Could not publish count-only status ('+resp.status+')');
+          JS
