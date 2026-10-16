@@ -1,0 +1,17 @@
+name: Cancel AI invite rollout immediately
+on:
+  push:
+    branches: [cancel-ai-invite-20261016]
+    paths: ['.github/workflows/cancel-ai-invite.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel running folder creation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS --retry 2 -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/38883009652/cancel"
