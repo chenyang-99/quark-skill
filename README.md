@@ -131,3 +131,18 @@ GitHub 附件和请求分支只包含密文；附件默认保留 1 天。
 - [GitHub Contents API](https://docs.github.com/en/rest/repos/contents)
 - [GitHub References API](https://docs.github.com/en/rest/git/refs)
 - [GitHub Actions](https://docs.github.com/en/actions)
+
+## Cloudflare gateway and official Oh My PPT release uploads (2026-11-13)
+
+The Cloudflare Worker is deployed at https://quark-agent-upload.lc-20260909-edge.workers.dev.
+Available routes: GET /health, GET /v1/release, POST /v1/upload-release, POST /v1/status.
+The Cloudflare Worker handles the HTTPS interface and encryption. GitHub Actions performs downloading, digest and size validation, and uploading via the official Quark CLI. Uploads are restricted to the latest stable arcsin1/oh-my-ppt release and these targets: windows, mac-intel, mac-apple.
+
+An Agent with authenticated GitHub CLI access can submit an encrypted task directly:
+
+    python scripts/invoke.py upload-release --repo chenyang-99/quark-skill --targets windows mac-intel mac-apple --output ./results/ohmyppt-unique
+
+The optional --parent-fid option is only used when the user explicitly specifies a directory FID; do not assume root folder 0.
+Cloudflare POST /v1/upload-release requires a one-request GitHub bearer token for repository owner chenyang-99. The Worker does not store it. The returned encrypted ticket must not be published. Poll POST /v1/status with the ticket, and verify manifest.status=complete before claiming an upload.
+The worker's JOB_KEY must remain in Cloudflare secrets. The Quark authorization remains encrypted on the GitHub quark-state branch and is restored only in GitHub Actions. Never publish credentials or give a third party a copy of the encrypted account state.
+Cloudflare source: cloudflare/worker.js. GitHub upload task source: scripts/upload-release.cjs.
