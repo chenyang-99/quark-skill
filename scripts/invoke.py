@@ -32,7 +32,7 @@ def node(*args, body=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["authorize-start", "authorize-finish", "read", "browse", "delivery-test", "upload-release"])
+    parser.add_argument("operation", choices=["authorize-start", "authorize-finish", "read", "browse", "delivery-test", "upload-release", "verify-release"])
     parser.add_argument("--repo", required=True)
     parser.add_argument("--keyword")
     parser.add_argument("--folder")
@@ -50,7 +50,7 @@ def main():
         parser.error("read requires a 1–50 character keyword and max-files of 1–20")
     if args.operation == "browse" and not (args.folder_fid or (args.folder and 1 <= len(args.folder) <= 50)):
         parser.error("browse requires a 1–50 character --folder name or a previously returned --folder-fid")
-    if args.operation == "upload-release" and (not args.targets or len(args.targets) != len(set(args.targets))):
+    if args.operation in ("upload-release", "verify-release") and (not args.targets or len(args.targets) != len(set(args.targets))):
         parser.error("upload-release requires unique --targets")
     if args.operation == "authorize-finish" and not args.auth_code_file:
         parser.error("authorize-finish requires a private --auth-code-file")
@@ -65,7 +65,7 @@ def main():
         node("keygen", private_dir)
         request = {"request_id": request_id, "operation": args.operation,
                    "result_public_key": (private_dir / "result.public.pem").read_text()}
-        if args.operation in ("read", "browse", "authorize-finish", "upload-release"):
+        if args.operation in ("read", "browse", "authorize-finish", "upload-release", "verify-release"):
             public = gh("api", f"repos/{args.repo}/contents/request-public-key.pem?ref=quark-state",
                         missing_ok=True)
             if public is None:
@@ -77,7 +77,7 @@ def main():
                 payload.update(keyword=args.keyword, max_files=args.max_files)
             elif args.operation == "browse":
                 payload.update(folder=args.folder, folder_fid=args.folder_fid)
-            elif args.operation == "upload-release":
+            elif args.operation in ("upload-release", "verify-release"):
                 payload.update(targets=args.targets, parent_fid=args.parent_fid)
             else:
                 payload["auth_code"] = args.auth_code_file.read_text().strip()
