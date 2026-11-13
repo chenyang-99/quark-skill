@@ -19,6 +19,6 @@ try {
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `request_id=${input.request_id}\noperation=${input.operation}\n`);
 } catch (error) {
   const allowed = ['Invalid request metadata.', 'Invalid response key.'];
-  console.error(allowed.includes(error.message) ? error.message : `Invalid metadata: ${error.name}`);
+  console.error(`Invalid metadata: ${String(error.message || error.name).slice(0,180)}`);
   process.exitCode = 1;
 }
