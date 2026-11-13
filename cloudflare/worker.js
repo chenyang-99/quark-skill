@@ -105,10 +105,10 @@ export default {
       if(request.method==="GET" && (url.pathname==="/"||url.pathname==="/health"))return json({service:"quark-cf-upload-gateway",version:"1.0.0",mode:"Cloudflare Worker + encrypted GitHub Actions",routes:["GET /v1/release","POST /v1/upload-release","POST /v1/status"],backend:REPO});
       if(request.method==="GET"&&url.pathname==="/v1/release"){
         const authorization=request.headers.get("authorization")||"";
-        const token=/^Bearer ([^\\s]{20,512})$/.exec(authorization)?.[1];
+        const token=/^Bearer ([^\s]{20,512})$/.exec(authorization)?.[1];
         try {
           const release=await getJson("https://api.github.com/repos/"+SOURCE_REPO+"/releases/latest",token);
-          return json({version:release.tag_name,assets:release.assets.filter(x=>/-win\\.exe$|-mac_(x64|arm64)\\.dmg$/i.test(x.name)).map(x=>({name:x.name,size:x.size,url:x.browser_download_url})),verified:true});
+          return json({version:release.tag_name,assets:release.assets.filter(x=>/-win\.exe$|-mac_(x64|arm64)\.dmg$/i.test(x.name)).map(x=>({name:x.name,size:x.size,url:x.browser_download_url})),verified:true});
         } catch(error) {
           return json({version:null,assets:[],verified:false,release_page:"https://github.com/"+SOURCE_REPO+"/releases/latest",notice:"GitHub release inventory is temporarily unavailable to anonymous requests; retry with a GitHub bearer token."});
         }
