@@ -146,3 +146,9 @@ The optional --parent-fid option is only used when the user explicitly specifies
 Cloudflare POST /v1/upload-release requires a one-request GitHub bearer token for repository owner chenyang-99. The Worker does not store it. The returned encrypted ticket must not be published. Poll POST /v1/status with the ticket, and verify manifest.status=complete before claiming an upload.
 The worker's JOB_KEY must remain in Cloudflare secrets. The Quark authorization remains encrypted on the GitHub quark-state branch and is restored only in GitHub Actions. Never publish credentials or give a third party a copy of the encrypted account state.
 Cloudflare source: cloudflare/worker.js. GitHub upload task source: scripts/upload-release.cjs.
+
+### Read-only installer verification
+
+    python scripts/invoke.py verify-release --repo chenyang-99/quark-skill --targets windows mac-intel mac-apple --output ./results/verify-unique
+
+This operation only calls the official Quark search API and compares exact filename and size to the latest stable release. It never uploads or modifies files. Treat missing files and unverified results as evidence gaps, not success.
