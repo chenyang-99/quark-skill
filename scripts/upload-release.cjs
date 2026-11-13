@@ -79,25 +79,88 @@ async function uploadRelease(input) {
     throw new Error('Combined release assets exceed the upload limit.');
   }
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quark-release-'));
+  function alreadyOnQuark(name, size) {
+    const result = runCli(['search', '--keyword', name, '--stdout-only'],
+      '核对用户夸克网盘中的官方安装包', { timeoutMs: 90000 });
+    const artifact = result.rows.findLast((row) =>
+      row.type === 'artifact' && row.action === 'search' && row.data?.file_path);
+    if (!artifact) throw new Error('Quark search did not return a complete artifact.');
+    return fs.readFileSync(artifact.data.file_path, 'utf8')
+      .split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+      .some((item) => item.filename === name && Number(item.size) === size);
+  }
   try {
     const files = [];
-    for (const asset of assets) files.push(await download(asset, directory));
-    const args = ['upload', ...files.map((f) => f.target)];
-    if (parent != null) args.push('--parent-fid', parent);
-    const result = runCli(args, '上传用户请求的 Oh My PPT 官方安装包',
-      { timeoutMs: 25 * 60 * 1000 });
-    const completed = result.rows.filter((row) => row.type === 'list' && row.code === 0);
-    if (completed.length < files.length) {
-      throw new Error('Official CLI did not confirm all upload items.');
+    let uploadedCount = 0, existingCount = 0;
+    for (const asset of assets) {
+      if (alreadyOnQuark(asset.name, asset.size)) {
+        console.log('Already present in Quark: ' + asset.name);
+        files.push({ filename: asset.name, bytes: asset.size, sha256: null,
+          state: 'existing', verified: true });
+        existingCount++;
+        continue;
+      }
+      let file;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log('Downloading official GitHub asset: ' + asset.name +
+            ' (attempt ' + attempt + ')');
+          file = await download(asset, directory);
+          break;
+        } catch (error) {
+          if (attempt === 3) throw error;
+          console.log('Download connection interrupted; retrying safely.');
+          await new Promise((resolve) => setTimeout(resolve, attempt * 2500));
+        }
+      }
+      let uploaded = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (alreadyOnQuark(asset.name, asset.size)) {
+          uploaded = true;
+          break;
+        }
+        const args = ['upload', file.target];
+        if (parent != null) args.push('--parent-fid', parent);
+        try {
+          console.log('Uploading with official Quark CLI: ' + asset.name +
+            ' (attempt ' + attempt + ')');
+          const result = runCli(args, '上传用户请求的 Oh My PPT 官方安装包',
+            { timeoutMs: 25 * 60 * 1000 });
+          if (!result.rows.some((row) => row.type === 'list' && row.code === 0)) {
+            throw new Error('Official Quark CLI did not confirm upload completion.');
+          }
+          uploaded = true;
+          break;
+        } catch (error) {
+          if (attempt === 3) throw error;
+          console.log('Quark connection interrupted; checking remote state before retry.');
+          await new Promise((resolve) => setTimeout(resolve, attempt * 4500));
+        }
+      }
+      if (!uploaded) throw new Error('Upload was not confirmed.');
+      uploadedCount++;
+      let verified = false;
+      for (let check = 0; check < 4; check++) {
+        try {
+          if (alreadyOnQuark(asset.name, asset.size)) { verified = true; break; }
+        } catch (e) {
+          if (check === 3) throw e;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3500));
+      }
+      files.push({ filename: file.filename, bytes: file.bytes, sha256: file.sha256,
+        state: 'uploaded', verified });
     }
     const manifest = {
       status: 'complete',
       operation: 'upload-release',
       repository: 'arcsin1/oh-my-ppt',
       version: release.tag_name,
-      files: files.map((f) => ({ name: f.filename, bytes: f.bytes, sha256: f.sha256 })),
-      uploaded_count: completed.length,
-      note: 'Upload confirmed by the official Quark CLI; target folder depends on Quark authorization.'
+      files: files.map((f) => ({ name: f.filename, bytes: f.bytes,
+        sha256: f.sha256, state: f.state, verified: f.verified })),
+      uploaded_count: uploadedCount,
+      existing_count: existingCount,
+      note: 'Each successful new upload was confirmed by the official Quark CLI; verified indicates an exact remote filename/size search match.'
     };
     writeJson('manifest.json', manifest);
     return manifest;
