@@ -29,7 +29,7 @@ function safeMessage(message, secret = '') {
     .slice(0, 2000);
 }
 
-function runCli(args, input, { allowFailure = false } = {}) {
+function runCli(args, input, { allowFailure = false, timeoutMs = 180000 } = {}) {
   const skill = process.env.QUARK_SKILL_DIR || path.join(os.homedir(), '.agents/skills/quarkclouddrive');
   const cli = path.join(skill, 'scripts/quark-drive.cjs');
   const childEnv = { ...process.env };
@@ -39,7 +39,7 @@ function runCli(args, input, { allowFailure = false } = {}) {
   const child = spawnSync(process.execPath,
     ['--require', path.join(__dirname, 'env-proxy.cjs'), cli, ...args,
       '--session-input', input, '--session-id', SESSION_ID],
-    { encoding: 'utf8', timeout: 180000, maxBuffer: 8 * 1024 * 1024, env: childEnv });
+    { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024, env: childEnv });
   if (child.error) throw new Error('Official CLI could not finish the request within the execution limits.');
   const output = parseOutput(child.stdout);
   if (!allowFailure && (child.status !== 0 || output.result.code !== 0)) {
@@ -211,7 +211,7 @@ function readMarkdown() {
   }
 }
 
-module.exports = { parseOutput, safeMessage, markdownCandidates, exportMarkdown, authorize, readMarkdown, browseDirectory, writeJson };
+module.exports = { runCli, parseOutput, safeMessage, markdownCandidates, exportMarkdown, authorize, readMarkdown, browseDirectory, writeJson };
 if (require.main === module) {
   try {
     if (process.argv[2] === 'authorize') authorize(process.argv[3]);
