@@ -114,3 +114,12 @@ response status and failed manifests. A missing result is not successful reading
 Request branches and artifacts contain ciphertext only. If the caller loses its
 private key, it must submit a new request; the repository cannot decrypt old
 response ciphertext for that caller.
+
+## Explicit Oh My PPT upload request
+
+The encrypted backend additionally supports upload-release; existing read remains Markdown-only. Given user authorization and an already bound Quark account:
+
+    python scripts/invoke.py upload-release --repo chenyang-99/quark-skill --targets windows mac-intel mac-apple --output ./results/unique
+
+Only allowed targets are windows, mac-intel, mac-apple; narrow targets to user request. Use --parent-fid ONLY when the user supplied an explicit destination FID; never insert 0 silently. The GitHub runner downloads the latest official non-prerelease arcsin1/oh-my-ppt installers, checks sizes/digest, and uploads through official Quark CLI. Check the decrypted manifest status and file count; a queued job alone does not establish success.
+The Cloudflare gateway https://quark-agent-upload.lc-20260909-edge.workers.dev has /health and /v1/release publicly readable. /v1/upload-release requires a trusted GitHub owner bearer token sent per HTTPS request (not stored), and /v1/status requires a private encrypted ticket. Never share either value in public content.
