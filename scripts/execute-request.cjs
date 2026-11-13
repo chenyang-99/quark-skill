@@ -3,6 +3,7 @@ const { loadInputKey } = require('./input-key.cjs');
 const { unpack } = require('./crypto.cjs');
 const task = require('./task.cjs');
 const { uploadRelease } = require('./upload-release.cjs');
+const { verifyRelease } = require('./verify-release.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -26,6 +27,8 @@ async function main(operation) {
     task.browseDirectory();
   } else if (operation === 'upload-release') {
     await uploadRelease({ targets: input.targets, parent_fid: input.parent_fid });
+  } else if (operation === 'verify-release') {
+    await verifyRelease({ targets: input.targets });
   } else if (operation === 'authorize-finish') {
     if (typeof input.auth_code !== 'string' || !input.auth_code.trim()) throw new Error('Authorization code is missing.');
     process.env.QUARK_AUTH_CODE = input.auth_code;
