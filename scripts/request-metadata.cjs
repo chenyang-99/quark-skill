@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 try {
   const input = JSON.parse(fs.readFileSync('request.json', 'utf8'));
   if (!/^[a-f0-9-]{36}$/i.test(input.request_id || '') ||
-      process.env.GITHUB_REF_NAME !== `quark-requests/${input.request_id}` ||
+      (process.env.GITHUB_REF_NAME !== `quark-requests/${input.request_id}` && process.env.GITHUB_REF !== `refs/heads/quark-requests/${input.request_id}`) ||
       !['read', 'browse', 'authorize-start', 'authorize-finish', 'delivery-test', 'upload-release'].includes(input.operation)) {
     throw new Error('Invalid request metadata.');
   }
@@ -17,7 +17,8 @@ try {
     `QUARK_REQUEST_ID=${input.request_id}\nQUARK_OPERATION=${input.operation}\nQUARK_ENCRYPTED_REQUEST=${encrypted}\n` +
     `QUARK_RESULT_PUBLIC_KEY<<QUARK_PUBLIC_KEY\n${publicKey}QUARK_PUBLIC_KEY\n`);
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `request_id=${input.request_id}\noperation=${input.operation}\n`);
-} catch {
-  console.error('Invalid encrypted request metadata.');
+} catch (error) {
+  const allowed = ['Invalid request metadata.', 'Invalid response key.'];
+  console.error(allowed.includes(error.message) ? error.message : `Invalid metadata: ${error.name}`);
   process.exitCode = 1;
 }
